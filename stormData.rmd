@@ -1,26 +1,47 @@
 ---
-title: "stormData"
+title: "Impact of Severe Weather Events on Public Health and the Economy in the United States"
 author: "JeremiShane"
 date: "10/12/2017"
-output: html_document
+output: 
+        html_document: 
+                code_folding: show      ## show or hide? default here to show code
+                df_print: paged         ## page dataframe output
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```  
 
+## Synopsis
+
+
+## Environment
+```{r system}
+s <- Sys.info()
+s[3]  ## display sys info
+r <- R.Version()
+r$platform  ## Display OS and R version
+r$version.string
+r$nickname
+```   
+
 ## Include Libraries
 ```{r includelibraries}
-
+library(plyr)
+library(dplyr)
 ```  
 
 ## Introduction
 
 Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.  
 
+Consider writing your report as if it were to be read by a government or municipal manager who might be responsible for preparing for severe weather events and will need to prioritize resources for different types of events. However, there is no need to make any specific recommendations in your report.
+
+## Data Processing  
+
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.  
 
-## Data
+### Data Fetch and Load  
 
 The data come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from:  
 https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2  
@@ -30,14 +51,52 @@ There is also some documentation of the database available. Here you will find h
 - National Weather Service Storm Data Documentation: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf  
 - National Climatic Data Center Storm Events FAQ: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf  
 
-The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.  
-
 ```{r readData, cache=TRUE}
 temp <- tempfile()
 download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", temp)
-df <- read.csv(temp)
+df <- read.csv(temp, strip.white=TRUE, na.strings="NA")
 unlink(temp)
 str(df)
+head(df)
 ```  
+
+### Data Cleanup and Transformation
+In this analysis we are attempting to answer the following questions:
+(1) Across the United States, which types of events (as indicated in the 𝙴𝚅𝚃𝚈𝙿𝙴 variable) are most harmful with respect to population health?  
+(2) Across the United States, which types of events have the greatest economic consequences?  
+
+So we need to isolate the outcome varables that are related to population health.  From visually exploring the data file and documentation these are: $FATALITIES, $INJURIES.  
+
+And we need to isolate the economic outcome variables. According to the documentation the Property damage and crop damage are dollar amounts qualified by a K, M or B to indicate thousands, millions or billions which are indicated in the corresponding EXP variable and are:  $PROPDMG, $PROPDMGEXP, $CROPDMG, $CROPDMGEXP    
+
+According to the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.  For this reason we will only include data from the year 2000 and beyond for our exploration and analysis.
+
+Let's isolate the variables of interest and transform the damage fields into complete dollar amounts that are of the same units of measure.  
+
+The following data frames will be isolated from the original data set:
+- dsfe - sum of fatalities by event type
+- dsie - sum of injuries by event type
+- dpde - sum dollar amount of property damage by event type
+- dcde - sum dollar amount of crop damage by event type
+- dhoe - total sum health outcome (fatalities plus injuries) by event type
+- dede - total economic damage costs (property plus crop) by event type  
+
+```{r variablesofinterest}
+dsfe <- subset(df, as.Date(BGN_DATE, "%m/%d/%y") >= "1/1/2000", select=c(FATALITIES, EVTYPE))
+dsfe <- dsfe %>% group_by(eventtype=EVTYPE) %>% summarise(fatalities = sum(FATALITIES))
+dsfe <- dsfe[order(-dsfe$fatalities), ]
+dsfe[1:20, ]  ## top 20 event types for total quantity of fatilities since year 2000  
+
+dsie <- subset(df, as.Date(BGN_DATE, "%m/%d/%y") >= "1/1/2000", select=c(INJURIES, EVTYPE))
+dsie <- dsie %>% group_by(eventtype=EVTYPE) %>% summarise(injuries = sum(INJURIES))
+dsie <- dsie[order(-dsie$injuries), ]
+dsie[1:20, ]  ## tp 20 event types for total quantity of injuries since year 2000
+
+## propertydamage <- df$PROPDMG, cropdamage <- df$CROPDMG)  We will have to do some computation to get actual $ amounts of damage into a new numerical field.
+
+```
+## Results  
+
+### Questions to be answered from this Storm Data Analysis  
 
 
