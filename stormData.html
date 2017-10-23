@@ -253,33 +253,69 @@ str(df)</code></pre>
 <p>So we need to isolate the outcome varables that are related to population health. From visually exploring the data file and documentation these are: $FATALITIES, $INJURIES.</p>
 <p>And we need to isolate the economic outcome variables. According to the documentation the Property damage and crop damage are dollar amounts qualified by a K, M or B to indicate thousands, millions or billions which are indicated in the corresponding EXP variable and are: $PROPDMG, $PROPDMGEXP, $CROPDMG, $CROPDMGEXP</p>
 <p>According to the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete. For this reason we will only include data from the year 2000 and beyond for our exploration and analysis.</p>
-<p>Let’s isolate the variables of interest and transform the damage fields into complete dollar amounts that are of the same units of measure.</p>
-<p>The following data frames will be isolated from the original data set: - dsfe - sum of fatalities by event type - dsie - sum of injuries by event type - dpde - sum dollar amount of property damage by event type - dcde - sum dollar amount of crop damage by event type - dhoe - total sum health outcome (fatalities plus injuries) by event type - dede - total economic damage costs (property plus crop) by event type</p>
-<pre class="r"><code>dsfe &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot;, select=c(FATALITIES, EVTYPE))
+<p>Let’s isolate the variables of interest and transform the damage fields into complete dollar amounts that are of the same units of measure. Then we will look at economic and health impact in very simple terms of the highest quantifications by Event Type.</p>
+<p>The following data frames will be isolated from the original data set: - dsfe - sum of fatalities by event type - dsie - sum of injuries by event type - dpde - sum dollar amount of property damage by event type - dcde - sum dollar amount of crop damage by event type - dhealth - sum of fatality points and injury points for health impact score - deconomic - total economic damage costs (property plus crop) by event type</p>
+<pre class="r"><code>## We first assume the association of Fatalities and Injuries as a quantification of impact to population health
+dsfe &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot;, select=c(FATALITIES, EVTYPE))
 dsfe &lt;- dsfe %&gt;% group_by(eventtype=EVTYPE) %&gt;% summarise(fatalities = sum(FATALITIES))
 dsfe &lt;- dsfe[order(-dsfe$fatalities), ]
-dsfe[1:20, ]  ## top 20 event types for total quantity of fatilities since year 2000  </code></pre>
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["eventtype"],"name":[1],"type":["fctr"],"align":["left"]},{"label":["fatalities"],"name":[2],"type":["dbl"],"align":["right"]}],"data":[{"1":"TORNADO","2":"5628"},{"1":"EXCESSIVE HEAT","2":"1903"},{"1":"FLASH FLOOD","2":"978"},{"1":"HEAT","2":"937"},{"1":"LIGHTNING","2":"816"},{"1":"TSTM WIND","2":"504"},{"1":"FLOOD","2":"470"},{"1":"RIP CURRENT","2":"368"},{"1":"HIGH WIND","2":"248"},{"1":"AVALANCHE","2":"224"},{"1":"WINTER STORM","2":"206"},{"1":"RIP CURRENTS","2":"204"},{"1":"HEAT WAVE","2":"172"},{"1":"EXTREME COLD","2":"160"},{"1":"THUNDERSTORM WIND","2":"133"},{"1":"HEAVY SNOW","2":"127"},{"1":"EXTREME COLD/WIND CHILL","2":"125"},{"1":"STRONG WIND","2":"103"},{"1":"BLIZZARD","2":"101"},{"1":"HIGH SURF","2":"101"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-</div>
-<pre class="r"><code>dsie &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot;, select=c(INJURIES, EVTYPE))
+
+dsie &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot;, select=c(INJURIES, EVTYPE))
 dsie &lt;- dsie %&gt;% group_by(eventtype=EVTYPE) %&gt;% summarise(injuries = sum(INJURIES))
 dsie &lt;- dsie[order(-dsie$injuries), ]
-dsie[1:20, ]  ## tp 20 event types for total quantity of injuries since year 2000</code></pre>
-<div data-pagedtable="false">
-<script data-pagedtable-source type="application/json">
-{"columns":[{"label":["eventtype"],"name":[1],"type":["fctr"],"align":["left"]},{"label":["injuries"],"name":[2],"type":["dbl"],"align":["right"]}],"data":[{"1":"TORNADO","2":"91007"},{"1":"TSTM WIND","2":"6957"},{"1":"FLOOD","2":"6789"},{"1":"EXCESSIVE HEAT","2":"6525"},{"1":"LIGHTNING","2":"5230"},{"1":"HEAT","2":"2100"},{"1":"ICE STORM","2":"1975"},{"1":"FLASH FLOOD","2":"1777"},{"1":"THUNDERSTORM WIND","2":"1488"},{"1":"HAIL","2":"1361"},{"1":"WINTER STORM","2":"1321"},{"1":"HURRICANE/TYPHOON","2":"1275"},{"1":"HIGH WIND","2":"1137"},{"1":"HEAVY SNOW","2":"1021"},{"1":"WILDFIRE","2":"911"},{"1":"THUNDERSTORM WINDS","2":"908"},{"1":"BLIZZARD","2":"805"},{"1":"FOG","2":"734"},{"1":"WILD/FOREST FIRE","2":"545"},{"1":"DUST STORM","2":"440"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
-  </script>
-</div>
-<pre class="r"><code>## propertydamage &lt;- df$PROPDMG, cropdamage &lt;- df$CROPDMG)  We will have to do some computation to get actual $ amounts of damage into a new numerical field.</code></pre>
+
+## for our analysis we are going to use a point system for health.  Fatalities are worth 4 points, while injuries are worth 1 point.  
+
+dhealth &lt;- data.frame(eventtype = dsfe$eventtype, fatalitypoints = dsfe$fatalities*4)
+di1 &lt;- data.frame(eventtype = dsie$eventtype, injurypoints = dsie$injuries)
+dhealth &lt;- merge(dhealth, di1)
+dhealth$healthimpactscore &lt;- dhealth$fatalitypoints + dhealth$injurypoints
+dhealth &lt;- dhealth[order(-dhealth$healthimpactscore), ]
+
+## Now we look at the variables associated with econimic impact.  It is totally reasonable to think that fatalities and injuries may also have an economic impact.  That would be a good question to answer with further data science analysis. Here we will simply look at health related factors for health impact score separate from financial factors for economic impact score.   
+
+## extract property damage in 1000's
+## the variables $PROPDMG, $PROPDMGEXP, $CROPDMG, $CROPDMGEXP  
+dpdek &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot; &amp; PROPDMGEXP ==&quot;K&quot;, select=c(EVTYPE, PROPDMG))
+dpdek$PROPDMG &lt;- dpdek$PROPDMG*1000
+## extract property damage in 1,000,000's
+dpdem &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot; &amp; PROPDMGEXP ==&quot;M&quot;, select=c(EVTYPE, PROPDMG))
+dpdem$PROPDMG &lt;- dpdem$PROPDMG*1000000
+## now row bind them together and we have property damage in $
+dpde &lt;- rbind(dpdek, dpdem)  
+
+## extract crop damage in 1000's
+dcdek &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot; &amp; CROPDMGEXP ==&quot;K&quot;, select=c(EVTYPE,CROPDMG))
+dcdek$CROPDMG &lt;- dcdek$CROPDMG*1000
+## extract crop damage in 1,000,000's
+dcdem &lt;- subset(df, as.Date(BGN_DATE, &quot;%m/%d/%y&quot;) &gt;= &quot;1/1/2000&quot; &amp; CROPDMGEXP ==&quot;M&quot;, select=c(EVTYPE, CROPDMG))
+dcdem$CROPDMG &lt;- dcdem$CROPDMG*1000000
+## now row bind them together and we have property damage in $
+dcde &lt;- rbind(dcdek, dcdem)
+
+## For economic impact we are going to use $ amount sums of property and crop damage as the measuring stick.
+dpde &lt;- dpde %&gt;% group_by(eventtype=EVTYPE) %&gt;% summarise(propertydamage = sum(PROPDMG))
+dcde &lt;- dcde %&gt;% group_by(eventtype=EVTYPE) %&gt;% summarise(cropdamage = sum(CROPDMG))
+deconomy &lt;- merge(dpde, dcde)
+deconomy$economicimpactscore &lt;- deconomy$propertydamage + deconomy$cropdamage
+deconomy &lt;- deconomy[order(-deconomy$economicimpactscore), ]</code></pre>
 </div>
 </div>
 <div id="results" class="section level2">
 <h2>Results</h2>
-<div id="questions-to-be-answered-from-this-storm-data-analysis" class="section level3">
-<h3>Questions to be answered from this Storm Data Analysis</h3>
+<p>This analysis is a very simple one and it could easily be argued there are multiple angles not explored here. Our results are simply a quantification score for the both health and economic impact. Fatalities are worth 4x, injury is 1x and summed together for the health impact score. Our economic impact is simply a sum of $ costs of both property damage and crop damage.</p>
+<p>Below are the top 20 most impactful event types for both health related and economic impact.</p>
+<pre class="r"><code>dhealth[1:20, c(1,4)]  ## top 20 event types for health related impact</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["eventtype"],"name":[1],"type":["fctr"],"align":["left"]},{"label":["healthimpactscore"],"name":[2],"type":["dbl"],"align":["right"]}],"data":[{"1":"TORNADO","2":"113519"},{"1":"EXCESSIVE HEAT","2":"14137"},{"1":"TSTM WIND","2":"8973"},{"1":"FLOOD","2":"8669"},{"1":"LIGHTNING","2":"8494"},{"1":"HEAT","2":"5848"},{"1":"FLASH FLOOD","2":"5689"},{"1":"ICE STORM","2":"2331"},{"1":"WINTER STORM","2":"2145"},{"1":"HIGH WIND","2":"2129"},{"1":"THUNDERSTORM WIND","2":"2020"},{"1":"RIP CURRENT","2":"1704"},{"1":"HURRICANE/TYPHOON","2":"1531"},{"1":"HEAVY SNOW","2":"1529"},{"1":"HAIL","2":"1421"},{"1":"WILDFIRE","2":"1211"},{"1":"BLIZZARD","2":"1209"},{"1":"THUNDERSTORM WINDS","2":"1164"},{"1":"RIP CURRENTS","2":"1113"},{"1":"AVALANCHE","2":"1066"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>deconomy[1:20, c(1,4)]  ## tp 20 event for economy related impact</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["eventtype"],"name":[1],"type":["fctr"],"align":["left"]},{"label":["economicimpactscore"],"name":[2],"type":["dbl"],"align":["right"]}],"data":[{"1":"TORNADO","2":"52037263590"},{"1":"FLOOD","2":"27819678250"},{"1":"HAIL","2":"16952904170"},{"1":"FLASH FLOOD","2":"16562128610"},{"1":"DROUGHT","2":"13518672000"},{"1":"HURRICANE","2":"8910229010"},{"1":"TSTM WIND","2":"5038935790"},{"1":"HURRICANE/TYPHOON","2":"4903712800"},{"1":"HIGH WIND","2":"4608617560"},{"1":"WILDFIRE","2":"4020586800"},{"1":"ICE STORM","2":"3967041310"},{"1":"THUNDERSTORM WIND","2":"3897964190"},{"1":"TROPICAL STORM","2":"3232236550"},{"1":"THUNDERSTORM WINDS","2":"1924103550"},{"1":"WINTER STORM","2":"1715441250"},{"1":"WILD/FOREST FIRE","2":"1608626330"},{"1":"HEAVY RAIN","2":"1427647890"},{"1":"EXTREME COLD","2":"1360710400"},{"1":"FROST/FREEZE","2":"1103566000"},{"1":"HEAVY SNOW","2":"1067242240"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
 </div>
 </div>
 
