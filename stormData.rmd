@@ -13,7 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```  
 
 ## Synopsis
+From this analysis we see that Tornados have the highest impact for both health and economics.  It appears that fatalities and injuries are produced similarly by natural disaster event types.  We see some difference between property damage and crop damage, however, this is very likely due to crops not always being present in the locations accounted for.
 
+This analysis uses a simple method for scoring health and economic impacts.  Health impact is calculated by grouping all fatalities and injuries by natural disaster event type.  Health impact score is used as the final measure which is 4x for each fatality added to 1x for each injury.  Economic impact score is a grouping on event type with the property damage and crop damage added together.
 
 ## Environment
 ```{r system}
@@ -93,11 +95,14 @@ dsie <- dsie[order(-dsie$injuries), ]
 
 ## for our analysis we are going to use a point system for health.  Fatalities are worth 4 points, while injuries are worth 1 point.  
 
-dhealth <- data.frame(eventtype = dsfe$eventtype, fatalitypoints = dsfe$fatalities*4)
-di1 <- data.frame(eventtype = dsie$eventtype, injurypoints = dsie$injuries)
-dhealth <- merge(dhealth, di1)
-dhealth$healthimpactscore <- dhealth$fatalitypoints + dhealth$injurypoints
-dhealth <- dhealth[order(-dhealth$healthimpactscore), ]
+dhoe <- data.frame(eventtype = dsfe$eventtype, fatalities = dsfe$fatalities, fatalitypoints = dsfe$fatalities*4)
+di1 <- data.frame(eventtype = dsie$eventtype, injuries = dsie$injuries, injurypoints = dsie$injuries)
+dhoe <- merge(dhoe, di1)
+dhoe$healthimpactscore <- dhoe$fatalitypoints + dhoe$injurypoints
+dhealth <- dhoe[order(-dhoe$healthimpactscore), ]
+dhealth$log10fatalitiesplus1 <- log10(dhealth$fatalities+1)
+dhealth$log10injuriesplus1 <- log10(dhealth$injuries+1)
+dhealth$ranking <- 1:nrow(dhealth)
 
 ## Now we look at the variables associated with econimic impact.  It is totally reasonable to think that fatalities and injuries may also have an economic impact.  That would be a good question to answer with further data science analysis. Here we will simply look at health related factors for health impact score separate from financial factors for economic impact score.   
 
@@ -126,7 +131,39 @@ dcde <- dcde %>% group_by(eventtype=EVTYPE) %>% summarise(cropdamage = sum(CROPD
 deconomy <- merge(dpde, dcde)
 deconomy$economicimpactscore <- deconomy$propertydamage + deconomy$cropdamage
 deconomy <- deconomy[order(-deconomy$economicimpactscore), ]
+deconomy$log10propertydamageplus1 <- log10(deconomy$propertydamage+1)
+deconomy$log10cropdamageplus1 <- log10(deconomy$cropdamage+1)
+deconomy$ranking <- 1:nrow(deconomy)
 
+```  
+
+Let's look at how each of the variables included in the scoring contributes individually to the ranking for both health and econimic impact.  We see for health both fatalities and injuries seem to follow very closely.  We also see similarity between property and crop damage, but with a clear difference.  
+
+```{r compareimpact}
+## set up plot area for 2 columns and 1 row
+par(mfrow=c(1,2), oma=c(1,1,4,0))
+## first let's look at impact of fatalities and injuries to health impact ranking
+with(dhealth, plot(ranking, log10fatalitiesplus1, col="black"))
+lo <- loess(dhealth$log10fatalitiesplus1 ~ dhealth$ranking)
+lines(predict(lo), col="black", lwd=2)
+
+with(dhealth, points(ranking, log10injuriesplus1, col=rgb(1,0,0,alpha=.1)))
+lo <- loess(dhealth$log10injuriesplus1 ~ dhealth$ranking)
+lines(predict(lo), col="red", lwd=2)
+legend("topright", c("Fatalities", "Injuries"), lty=c(1,1), col=c("black", "red"), lwd=c(2,2), bg="transparent")
+title(main="Fatalities vs. Injuries")
+
+## Now lets add the same for economic property and crop damage
+with(deconomy, plot(ranking, log10propertydamageplus1, col="blue"))
+lo <- loess(deconomy$log10propertydamageplus1 ~ deconomy$ranking)
+lines(predict(lo), col="blue", lwd=2)
+with(deconomy, points(ranking, log10cropdamageplus1, col="orange"))
+lo <- loess(deconomy$log10cropdamageplus1 ~ deconomy$ranking)
+lines(predict(lo), col="orange", lwd=2)
+legend("topright", c("Property", "Crop"), lty=c(1,1), col=c("blue", "orange"), lwd=c(2,2), bg="transparent")
+title(main="Property vs. Crop Damage")
+
+title(main="Contributions to Ranking", outer = TRUE)
 ```  
 
 ## Results 
@@ -139,5 +176,4 @@ Below are the top 20 most impactful event types for both health related and econ
 dhealth[1:20, c(1,4)]  ## top 20 event types for health related impact
 deconomy[1:20, c(1,4)]  ## tp 20 event for economy related impact
 ```
-
 
